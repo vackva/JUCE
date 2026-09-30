@@ -35,10 +35,16 @@ static String getCpuInfo (const char* key)
 
 static String getLocaleValue (nl_item key)
 {
-    auto oldLocale = ::setlocale (LC_ALL, "");
-    auto result = String::fromUTF8 (nl_langinfo (key));
-    ::setlocale (LC_ALL, oldLocale);
-    return result;
+    // Uses a separate locale object: switching the global locale would affect number
+    // parsing/formatting on every other thread of the host process.
+    if (auto environmentLocale = ::newlocale (LC_ALL_MASK, "", (locale_t) nullptr))
+    {
+        auto result = String::fromUTF8 (::nl_langinfo_l (key, environmentLocale));
+        ::freelocale (environmentLocale);
+        return result;
+    }
+
+    return String::fromUTF8 (::nl_langinfo (key));
 }
 #endif
 
