@@ -205,9 +205,24 @@ private:
                             makeSymbolBinding (juce_gdk_set_allowed_backends, "gdk_set_allowed_backends"));
     }
 
+    static bool openFirstAvailable (DynamicLibrary& lib, std::initializer_list<const char*> names)
+    {
+        for (auto* name : names)
+            if (lib.open (name))
+                return true;
+
+        return false;
+    }
+
     //==============================================================================
-    DynamicLibrary gtkLib { "libgtk-3.so" }, webkitLib { "libwebkit2gtk-4.0.so" };
-    const bool webKitIsAvailable = loadWebkitSymbols() && loadGtkSymbols();
+    // The unversioned .so names only exist when the -dev packages are installed, and current
+    // distributions ship webkit2gtk-4.1 (libsoup 3) instead of 4.0, so try the runtime names first.
+    DynamicLibrary gtkLib, webkitLib;
+    const bool webKitIsAvailable = openFirstAvailable (gtkLib, { "libgtk-3.so.0", "libgtk-3.so" })
+                                && openFirstAvailable (webkitLib, { "libwebkit2gtk-4.1.so.0", "libwebkit2gtk-4.0.so.37",
+                                                                    "libwebkit2gtk-4.1.so",   "libwebkit2gtk-4.0.so" })
+                                && loadWebkitSymbols()
+                                && loadGtkSymbols();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WebKitSymbols)
 };
