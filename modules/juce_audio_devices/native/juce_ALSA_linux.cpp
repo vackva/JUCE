@@ -75,8 +75,11 @@ static void getDeviceNumChannels (snd_pcm_t* handle, unsigned int* minChans, uns
 
         JUCE_ALSA_LOG ("getDeviceNumChannels: " << (int) *minChans << " " << (int) *maxChans);
 
-        // some virtual devices (dmix for example) report 10000 channels , we have to clamp these values
-        *maxChans = jmin (*maxChans, 256u);
+        // some virtual devices (dmix for example) report 10000 channels , we have to clamp these values.
+        // Plugin-backed devices (PipeWire's ALSA plugin, pulse, jack) report more channels than they
+        // can open; PipeWire 1.6.0-1.6.2 crashes when opened with more than 64.
+        const auto channelLimit = snd_pcm_type (handle) == SND_PCM_TYPE_IOPLUG ? 64u : 256u;
+        *maxChans = jmin (*maxChans, channelLimit);
         *minChans = jmin (*minChans, *maxChans);
     }
     else
