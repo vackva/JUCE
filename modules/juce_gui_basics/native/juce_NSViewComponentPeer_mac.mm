@@ -1627,7 +1627,7 @@ public:
 
         const auto handled = [&]() -> bool
         {
-            if (auto* target = findCurrentTextInputTarget())
+            if (findCurrentTextInputTarget() != nullptr)
                 if (const auto* inputContext = [view inputContext])
                     return [inputContext handleEvent: ev] && ! viewCannotHandleEvent;
 
@@ -1905,6 +1905,9 @@ private:
             case NSEventTypeScrollWheel:
             case NSEventTypeTabletPoint:
             case NSEventTypeTabletProximity:
+           #if defined (__MAC_26_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_26_0
+            case NSEventTypeMouseCancelled:
+           #endif
                 break;
 
             case NSEventTypeFlagsChanged:
