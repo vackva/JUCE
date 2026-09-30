@@ -520,6 +520,33 @@ static Image createNSWindowSnapshot (NSWindow* nsWindow)
 {
     JUCE_AUTORELEASEPOOL
     {
+       #if defined (MAC_OS_VERSION_15_0) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_15_0
+        // CGWindowListCreateImage is unavailable when targeting macOS 15 or later, so the window's
+        // view hierarchy (including the title bar, which lives in the content view's superview)
+        // is rendered directly instead. Unlike a window-server capture this needs no screen
+        // recording permission, but content drawn outside AppKit (Metal/OpenGL layers) is not included.
+        NSView* view = [[nsWindow contentView] superview] != nil ? [[nsWindow contentView] superview]
+                                                                   : [nsWindow contentView];
+
+        if (view == nil)
+            return {};
+
+        const auto bounds = [view bounds];
+        NSBitmapImageRep* bitmapRep = [view bitmapImageRepForCachingDisplayInRect: bounds];
+
+        if (bitmapRep == nil)
+            return {};
+
+        [view cacheDisplayInRect: bounds toBitmapImageRep: bitmapRep];
+
+        Image result (Image::ARGB, (int) [bitmapRep pixelsWide], (int) [bitmapRep pixelsHigh], true);
+
+        selectImageForDrawing (result);
+        [bitmapRep drawInRect: NSMakeRect (0, 0, (CGFloat) result.getWidth(), (CGFloat) result.getHeight())];
+        releaseImageAfterDrawing();
+
+        return result;
+       #else
         // CGWindowListCreateImage is replaced by functions in the ScreenCaptureKit framework, but
         // that framework is only available from macOS 12.3 onwards.
         // A suitable @available check should be added once the minimum build OS is 12.3 or greater,
@@ -551,6 +578,7 @@ static Image createNSWindowSnapshot (NSWindow* nsWindow)
         CGImageRelease (screenShot);
 
         return result;
+       #endif
     }
 }
 
