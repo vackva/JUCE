@@ -308,25 +308,41 @@ struct iOSAudioIODevice::Pimpl final : public AsyncUpdater
         return roundToInt (currentSampleRate * [AVAudioSession sharedInstance].IOBufferDuration);
     }
 
+    // From iOS 18 the session applies a preferred buffer duration asynchronously and rounds an
+    // imprecise one up (requesting one frame more, as older iOS versions needed, doubles the
+    // buffer). There the exact duration is requested and the request is taken as the result.
+    static bool hasAsyncBufferDuration()
+    {
+        if (@available (iOS 18, *))
+            return true;
+
+        return false;
+    }
+
     int tryBufferSize (const double currentSampleRate, const int newBufferSize)
     {
-        NSTimeInterval bufferDuration = currentSampleRate > 0 ? (NSTimeInterval) ((newBufferSize + 1) / currentSampleRate) : 0.0;
+        const auto asyncDuration = hasAsyncBufferDuration();
+        const auto requestedFrames = asyncDuration ? newBufferSize : newBufferSize + 1;
+        NSTimeInterval bufferDuration = currentSampleRate > 0 ? (NSTimeInterval) requestedFrames / currentSampleRate : 0.0;
 
         auto session = [AVAudioSession sharedInstance];
         JUCE_NSERROR_CHECK ([session setPreferredIOBufferDuration: bufferDuration
                                                             error: &error]);
 
-        return getBufferSize (currentSampleRate);
+        return asyncDuration ? newBufferSize : getBufferSize (currentSampleRate);
     }
 
     void updateAvailableBufferSizes()
     {
         availableBufferSizes.clear();
 
-        auto newBufferSize = tryBufferSize (sampleRate, 64);
+        // Probing reads the result back, which iOS 18 does not report in time: offer the usual
+        // range there and let the session round a request.
+        const auto probe = ! hasAsyncBufferDuration();
+        auto newBufferSize = probe ? tryBufferSize (sampleRate, 64) : 64;
         jassert (newBufferSize > 0);
 
-        const auto longestBufferSize  = tryBufferSize (sampleRate, 4096);
+        const auto longestBufferSize = probe ? tryBufferSize (sampleRate, 4096) : 4096;
 
         while (newBufferSize <= longestBufferSize)
         {
